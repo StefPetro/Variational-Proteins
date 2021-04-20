@@ -3,7 +3,7 @@
 import torch, time, sys, re
 import pandas as pd
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWXYZ-'
 SEQ2IDX  = dict(map(reversed, enumerate(ALPHABET)))
@@ -111,6 +111,35 @@ def mutants(df):
         mutants['value'].append(v)
     return pd.DataFrame(data=mutants)    
 
+
+
+def gen_weights(encodings, batch_size=1024):
+    # print(f"Calculating {len(encodings)} weights...")
+
+    msk_idx = 999 # Data.ALPHABET.find('-')
+    seq_len = encodings.shape[2]
+    flat = encodings.flatten(1)
+    batches = flat.shape[0] // batch_size + 1
+    weights = []
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    for i in range(batches):
+        # print(f"\tBatch {i}")
+        window = flat[i * batch_size : (i+1) * batch_size]
+        encwin = encodings[i * batch_size : (i+1) * batch_size]
+        smatrix = window @ flat.T                  # Similarity matrix
+        seq_len = encwin.argmax(dim=1) != msk_idx  # Mask character `-` do 
+        seq_len = seq_len.sum(-1).unsqueeze(-1)    # not contribute to weight
+        w_batch = 1.0 / (smatrix / seq_len).gt(0.8).sum(1).float()
+        weights.append(w_batch)
+
+    weights = torch.cat(weights)
+    neff = weights.sum()
+
+    return (weights, neff)
+
+
 def data(batch_size = 128, device = 'cpu'):
     df = fasta('data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m')
     df['label'] = labels('data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m')
@@ -127,13 +156,16 @@ def data(batch_size = 128, device = 'cpu'):
     # Unique aminoacids are are:
     # ''.join(set(''.join(df.trimmed.to_list())))
 
+    ## Added - weighted sampling
     dataset    = encode(df.trimmed).to(device)
-    dataloader = DataLoader(dataset, shuffle = True, batch_size = batch_size)
+    weights, neff = gen_weights(dataset, batch_size=batch_size)  # added
+    sampler = WeightedRandomSampler(weights=weights, num_samples=len(dataset), replacement=True)  # Added
+    dataloader = DataLoader(dataset, shuffle=False, batch_size=batch_size, sampler=sampler)  # Added sampler, changed shuffle to False
     
     mutants_df = mutants(df)
     mutants_tensor = encode(mutants_df.sequence)
 
-    return dataloader, df, mutants_tensor, mutants_df
+    return dataloader, df, mutants_tensor, mutants_df, neff
 
 # nice colors for the terminal
 class c:
