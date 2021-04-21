@@ -175,6 +175,17 @@ class VAE(nn.Module):
         h = self.fc3h(h)
         h = torch.sigmoid(h)
 
+        if self.bayesian:
+            for module in [self.W, self.C, self.S]: # We need to sample the weight manually 
+                sample_new_weight(module, None)     # because we never call forward on those
+                                                    # layers
+
+            lamb = Normal(self.lamb_mean,       self.lamb_logvar.mul(1/2).exp()).rsample()
+            b    = Normal(self.W_out_b_mean, self.W_out_b_logvar.mul(1/2).exp()).rsample()    
+        else:
+            lamb = self.lamb                    # lamb:  [ input_size                 ]
+            b    = self.W_out_b                 # b:     [ input_size                 ]
+
         W = self.W.weight                       # W:    [ (hidden x seq_len) x inner ]
         C = self.C.weight                       # C:    [ inner   x alphabet_len     ]
         S = self.S.weight.repeat(self.div, 1)   # S:    [ hidden  x seq_len          ]
