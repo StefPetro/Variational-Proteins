@@ -3,7 +3,6 @@ import torch
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
-# import torch.normal as Normal
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -74,8 +73,8 @@ class VAE(nn.Module):
         self.variational_layers = []
 
         # Layer sizes
-        self.hidden_size = 64*4
-        self.latent_size = 2
+        self.hidden_size = 2000
+        self.latent_size = 32
 
         # Inputs that don't change
         self.alphabet_len  = kwargs['alphabet_len']
@@ -87,29 +86,28 @@ class VAE(nn.Module):
         self.div = kwargs.get('div', 8)
         self.beta = kwargs.get('beta', 1)
         self.inner = kwargs.get('inner', 16) 
-        self.h2_div = kwargs.get('h2_div', 4) # set maybe to 1 if not stated? # it's the divisor that helps to control the dimensionality
+        self.h2_div = kwargs.get('h2_div', 1) # set maybe to 1 if not stated? # it's the divisor that helps to control the dimensionality
         self.bayesian = kwargs.get('bayesian', True) 
 
         self.lamb = nn.Parameter(torch.Tensor([0.1] * self.input_size))  # lambda - regularization term
         self.W_out_b = nn.Parameter(torch.Tensor([0.1] * self.input_size))  # bias
             
         # Original paper: Encoder uses linear layers with 1500-1500-30 structure and ReLU transfer functions
-        # Too computational heavy for deepnote. Use 64-64-32 until we find solution
-        self.fc1 = nn.Linear(self.input_size, 64)
-        self.fc1h = nn.Linear(64, 30)
+        self.fc1 = nn.Linear(self.input_size, int(self.hidden_size * (3/4)))
+        self.fc1h = nn.Linear(int(self.hidden_size * (3/4)), int(self.hidden_size * (3/4)))
 
         # Latent space `mu` and `var`
-        self.fc21 = nn.Linear(30, self.latent_size) # int(self.hidden_size * (3/4))
-        self.fc22 = nn.Linear(30, self.latent_size) # int(self.hidden_size * (3/4))
+        self.fc21 = nn.Linear(int(self.hidden_size * (3/4)), self.latent_size) 
+        self.fc22 = nn.Linear(int(self.hidden_size * (3/4)), self.latent_size)
 
         # Original paper: Decoder uses linear layers with size 100, ReLU, linear layer with size 2000 and sigmoid
         # and then output.
-        # Too computational heavy, so we use 32-64 instead until we find solution
-        self.fc3 = nn.Linear(self.latent_size, 32)
+        self.fc3 = nn.Linear(self.latent_size, self.hidden_size // 16)
         self.fc3 = make_variational_linear(self.fc3)
         self.variational_layers.append(self.fc3)
 
-        self.fc3h = nn.Linear(32, self.hidden_size // self.h2_div)
+        # self.fc3h = nn.Linear(32, self.hidden_size // self.h2_div)
+        self.fc3h = nn.Linear(self.hidden_size // 16, self.hidden_size // self.h2_div)
         self.fc3h = make_variational_linear(self.fc3h)
         self.variational_layers.append(self.fc3h)
 
