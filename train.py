@@ -48,7 +48,7 @@ stats = {
     }          # protein fitness according to eq.1 from paper
 
 
-for epoch in range(30):
+for epoch in range(200):
     # Unsupervised training on the MSA sequences.
     # https://stackoverflow.com/questions/51433378/what-does-model-train-do-in-pytorch
     vae.train()
@@ -72,7 +72,7 @@ for epoch in range(30):
     # elbos = vae.logp(eval_batch)
     # diffs       = elbos[1:] - elbos[0] # log-ratio (first equation in the paper)
     # cor, _      = spearmanr(mutants_df.value, diffs.detach().to('cpu'))
-    cor = get_cor_ensamble(eval_batch, mutants_df.value, vae, ensambles=16, rand=True)
+    cor = get_cor_ensamble(eval_batch, mutants_df.value, vae, ensambles=512, rand=True)
     
     # Populate statistics 
     stats['rl'].append(np.mean(epoch_losses['rl']))
@@ -92,6 +92,6 @@ torch.save({
     'state_dict': vae.state_dict(), 
     'stats':      stats,
     'args':       args,
-}, "models/full_paper_2.model.pth")
+}, "models/ep200_hs2000_e512_ls32.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
 
 
