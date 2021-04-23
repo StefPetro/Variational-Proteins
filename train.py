@@ -34,7 +34,8 @@ eval_batch = torch.cat([wildtype.unsqueeze(0), mutants_tensor.to(device)])
 args = {
     'alphabet_len': dataloader.dataset[0].shape[0],
     'seq_len':      dataloader.dataset[0].shape[1],
-    'neff':         neff
+    'neff':         neff,
+    'latent_size':  8
 }
 
 vae   = VAE(**args).to(device)
@@ -48,7 +49,7 @@ stats = {
     }          # protein fitness according to eq.1 from paper
 
 
-for epoch in range(200):
+for epoch in range(150):
     # Unsupervised training on the MSA sequences.
     # https://stackoverflow.com/questions/51433378/what-does-model-train-do-in-pytorch
     vae.train()
@@ -92,6 +93,6 @@ torch.save({
     'state_dict': vae.state_dict(), 
     'stats':      stats,
     'args':       args,
-}, "models/ep200_hs2000_e512_ls32.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
+}, "models/ep150_hs2000_e512_ls8.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
 
 

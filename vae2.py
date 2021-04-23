@@ -74,7 +74,8 @@ class VAE(nn.Module):
 
         # Layer sizes
         self.hidden_size = 2000
-        self.latent_size = 32
+        self.latent_size = kwargs.get('latent_size', 32)
+        print(f'Size of latent space: {self.latent_size}')
 
         # Inputs that don't change
         self.alphabet_len  = kwargs['alphabet_len']
@@ -86,12 +87,13 @@ class VAE(nn.Module):
         self.div = kwargs.get('div', 8)
         self.beta = kwargs.get('beta', 1)
         self.inner = kwargs.get('inner', 16) 
-        self.h2_div = kwargs.get('h2_div', 1) # set maybe to 1 if not stated? # it's the divisor that helps to control the dimensionality
-        self.bayesian = kwargs.get('bayesian', True) 
+        self.h2_div = kwargs.get('h2_div', 1)
+        self.bayesian = kwargs.get('bayesian', True)
+        self.dropout = kwargs.get('dropout', 0.0)
 
         self.lamb = nn.Parameter(torch.Tensor([0.1] * self.input_size))  # lambda - regularization term
         self.W_out_b = nn.Parameter(torch.Tensor([0.1] * self.input_size))  # bias
-            
+        
         # Original paper: Encoder uses linear layers with 1500-1500-30 structure and ReLU transfer functions
         self.fc1 = nn.Linear(self.input_size, int(self.hidden_size * (3/4)))
         self.fc1h = nn.Linear(int(self.hidden_size * (3/4)), int(self.hidden_size * (3/4)))
@@ -106,7 +108,6 @@ class VAE(nn.Module):
         self.fc3 = make_variational_linear(self.fc3)
         self.variational_layers.append(self.fc3)
 
-        # self.fc3h = nn.Linear(32, self.hidden_size // self.h2_div)
         self.fc3h = nn.Linear(self.hidden_size // 16, self.hidden_size // self.h2_div)
         self.fc3h = make_variational_linear(self.fc3h)
         self.variational_layers.append(self.fc3h)
@@ -196,7 +197,7 @@ class VAE(nn.Module):
         W_out = W_out * S                       # W_out: [ hidden x alphabet_len x seq_len ]
         W_out = W_out.view(-1, self.input_size) # W_out: [ hidden x input_size ]
 
-        return (1 + self.lamb.exp()).log() * F.linear(h, W_out.T, self.W_out_b)  # us W_out_b as b correct?
+        return (1 + self.lamb.exp()).log() * F.linear(h, W_out.T, self.W_out_b)
 
 
     def forward(self, x, rep=True):
