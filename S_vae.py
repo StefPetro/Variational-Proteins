@@ -4,7 +4,16 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 
+import numpy as np
+import torch.optim as optim
+import torch.utils.data
+from collections import defaultdict
+
+from hyperspherical_vae.distributions import VonMisesFisher, HypersphericalUniform
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def sample_new_weight(module, input):
     m = module
@@ -31,6 +40,7 @@ def sample_new_weight(module, input):
 
     return None 
     
+
 def make_variational_linear(module, name=None):
     m, has_bias = module, module.bias is not None
     setattr(module, "name", name)
@@ -66,17 +76,18 @@ def make_variational_linear(module, name=None):
     return m
 
 
-class VAE(nn.Module):
+class S_VAE(torch.nn.Module):
+    
     def __init__(self, **kwargs):
-        super(VAE, self).__init__()
+        super(S_VAE, self).__init__()
 
         self.variational_layers = []
 
         # Layer sizes
         self.hidden_size = 2000
-        self.latent_size = kwargs.get('latent_size', 32)
+        self.latent_size = kwargs.get('latent_size', 2)
         print(f'Size of latent space: {self.latent_size}')
-
+        
         # Inputs that don't change
         self.alphabet_len  = kwargs['alphabet_len']
         self.seq_len       = kwargs['seq_len']
@@ -93,15 +104,18 @@ class VAE(nn.Module):
 
         self.lamb = nn.Parameter(torch.Tensor([0.1] * self.input_size))  # lambda - regularization term
         self.W_out_b = nn.Parameter(torch.Tensor([0.1] * self.input_size))  # bias
-        
+
+        # 2 hidden layers encoder
         # Original paper: Encoder uses linear layers with 1500-1500-30 structure and ReLU transfer functions
         self.fc1 = nn.Linear(self.input_size, int(self.hidden_size * (3/4)))
         self.fc1h = nn.Linear(int(self.hidden_size * (3/4)), int(self.hidden_size * (3/4)))
 
-        # Latent space `mu` and `var`
-        self.fc21 = nn.Linear(int(self.hidden_size * (3/4)), self.latent_size) 
-        self.fc22 = nn.Linear(int(self.hidden_size * (3/4)), self.latent_size)
-
+        # Latent space
+        # compute mean and concentration of the von Mises-Fisher
+        self.fc_mean = nn.Linear(int(self.hidden_size * (3/4)), self.latent_size) 
+        self.fc_var = nn.Linear(int(self.hidden_size * (3/4)), 1)
+            
+        # 2 hidden layers decoder
         # Original paper: Decoder uses linear layers with size 100, ReLU, linear layer with size 2000 and sigmoid
         # and then output.
         self.fc3 = nn.Linear(self.latent_size, self.hidden_size // 16)
@@ -136,6 +150,7 @@ class VAE(nn.Module):
             self.W_out_b = nn.Parameter(torch.Tensor([0.1 * self.input_size])) # NOTE: WORKS
             # 0.01 * torch.randn(self.input_size).abs()
 
+
         # INIT
         # Using article: https://towardsdatascience.com/weight-initialization-in-neural-networks-a-journey-from-the-basics-to-kaiming-954fb9b47c79
         n = 0 # count of linear layers
@@ -143,10 +158,10 @@ class VAE(nn.Module):
             if not str(layer).startswith('Linear'):
                 continue
             
-            if n == 2 or n == 3 or n >= 5: # making sure the init is on latent, sigmoid activation and group sparsity
+            if n == 5: # making sure the init is on latent, sigmoid activation and group sparsity
                 nn.init.xavier_normal_(layer.weight)  # Xavier normalization for layers with Sigmoid activation
                 print(f'{layer} init Xavier')
-            else:
+            elif n == 0 or n == 1 or n == 4:
                 nn.init.kaiming_normal_(layer.weight, mode='fan_in', nonlinearity='relu') # Kaiming normalization for layers with RELU activation
                 print(f'{layer} init Kaiming')
             
@@ -157,28 +172,31 @@ class VAE(nn.Module):
             
             n += 1
         
-        nn.init.constant_(self.fc22.bias, -5)
+        # nn.init.constant_(self.fc_var.bias, -5) # Var can't be negative
 
 
-    def encode(self, x):    
-        x = x.view(-1, self.input_size)                    # flatten
+    def encode(self, x):
+        x = x.view(-1, self.input_size) # flatten
 
         # Encode
         x = self.fc1(x)
         x = F.relu(x)
         x = self.fc1h(x)
         x = F.relu(x)
-
-        mu, logvar = self.fc21(x), self.fc22(x)            # branch mu, var
-
-        return mu, logvar
-
-    def reparameterize(self, mu, logvar):
-        z = mu + torch.randn_like(mu) * (0.5*logvar).exp() # reparameterize
         
-        return z
+        
+        # compute mean and concentration of the von Mises-Fisher
+        z_mean = self.fc_mean(x)
+        z_mean = z_mean / z_mean.norm(dim=-1, keepdim=True)
+        # the `+ 1` prevent collapsing behaviors
+        # Using softplus to make sure values always are positive
+        z_var = F.softplus(self.fc_var(x)) + 1
+
+        return z_mean, z_var
     
+
     def decode(self, x):
+        
         # Decode
         h = self.fc3(x)
         h = F.relu(h)
@@ -209,25 +227,36 @@ class VAE(nn.Module):
         W_out = W_out.view(-1, self.input_size) # W_out: [ hidden x input_size ]
 
         return (1 + self.lamb.exp()).log() * F.linear(h, W_out.T, self.W_out_b)
-
-
-    def forward(self, x, rep=True):
-        mu, logvar = self.encode(x)
-        z = self.reparameterize(mu, logvar)
-        out = self.decode(z)                                   # decode
         
+    def reparameterize(self, z_mean, z_var):
+        q_z = VonMisesFisher(z_mean, z_var)
+        p_z = HypersphericalUniform(self.latent_size - 1)
+
+        return q_z, p_z
+        
+    def forward(self, x): 
+        z_mean, z_var = self.encode(x)
+
+        # Detach and set to cpu as VMF and HYU don't have to gpu options
+        z_mean, z_var = z_mean.detach().cpu(), z_var.detach().cpu() 
+        
+        q_z, p_z = self.reparameterize(z_mean, z_var)
+        z = q_z.rsample().to(device)
+        out = self.decode(z)
+
         # P: what the two lines below do?
         out = out.view(-1, self.alphabet_len, self.seq_len)    # squeeze back
         out = out.log_softmax(dim=1)                           # softmax
-
-        return out, mu, logvar
+        
+        return out, z_mean, z_var, q_z, p_z
     
 
     def logp(self, batch, rand = False):
         ''' Returns individual log likelihoods of the batch'''
 
         mu, logvar = self.encode(batch)
-        z          = self.reparameterize(mu, logvar) if rand else mu
+        q_z, p_z = self.reparameterize(mu, logvar)
+        z = q_z.rsample()
 
         recon      = self.decode(z)
         recon      = recon.view(-1, self.alphabet_len, self.seq_len)
@@ -239,19 +268,16 @@ class VAE(nn.Module):
         elbo       = logp + kl
 
         return elbo
-
-
-    def loss(self, recon_x, x, mu, logvar):
+    
+    
+    def loss(self, recon_x, x, mu, logvar, q_z, p_z):
         # RL, Reconstruction loss
         # RL = F.nll_loss(recon_x, x.argmax(dim=1), reduction='none).sum(-1)
         RL = (-recon_x*x).sum(-2).sum(-1)
         # RL2 = F.nll_loss(recon_x, x.argmax(dim=1), reduction='none').sum(-1)
 
         # KL, Kullback-Leibler divergence loss (for `z`):
-        # KLZ = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(-1)
-        KLZ_q = Normal(mu, logvar.mul(1/2).exp())
-        KLZ_p = Normal(torch.zeros_like(mu), torch.ones_like(logvar))
-        KLZ   = kl_divergence(KLZ_q, KLZ_p).sum(-1)
+        KLZ   = kl_divergence(q_z, p_z).sum(-1) # Using q_z and p_z as we already have drawn from the dist
 
         # KLP, Kullback-Leibler divergence loss (for network parameters):
         KLP = 0
@@ -291,12 +317,4 @@ class VAE(nn.Module):
         KLP = torch.tensor([0], requires_grad=False) if KLP == 0 else KLP
         
         return loss, RL.mean(), KLZ.mean(), KLP
-
-
-# RL - distance between true target and network result
-# Cateogorical distribution - 250 positions - each position 20 different amino acids
-
-# sequence weighting, two ways of doing it: 
-# 1. Weighted sampling where samples are used corresponding their weight. 
-# 2. Backwards loss is scaled according to weighting.
-# Yevgen says: Maybe look what is best
+    
