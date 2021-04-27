@@ -3,7 +3,7 @@ import numpy as np
 from misc import data, c
 from torch import optim
 from scipy.stats import spearmanr
-from vae2 import VAE # import the last version
+from vae3 import VAE # import the last version
 
 def get_cor_ensamble(batch, mutants_values, model, ensambles = 512, rand = True):
     model.eval()
@@ -88,6 +88,6 @@ torch.save({
     'state_dict': vae.state_dict(), 
     'stats':      stats,
     'args':       args,
-}, "models/ep200_hs2000_e512_ls32_kaiming_partialinit.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
+}, "models/ep200_hs2000_e512_ls32_kaiming_allinit.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
 
 

@@ -143,10 +143,10 @@ class VAE(nn.Module):
             if not str(layer).startswith('Linear'):
                 continue
             
-            if n == 5: # making sure the init is on latent, sigmoid activation and group sparsity
+            if n == 2 or n == 3 or n => 5: # making sure the init is on latent, sigmoid activation and group sparsity
                 nn.init.xavier_normal_(layer.weight)  # Xavier normalization for layers with Sigmoid activation
                 print(f'{layer} init Xavier')
-            elif n == 0 or n == 1 or n == 4:
+            else:
                 nn.init.kaiming_normal_(layer.weight, mode='fan_in', nonlinearity='relu') # Kaiming normalization for layers with RELU activation
                 print(f'{layer} init Kaiming')
             

@@ -125,3 +125,4 @@ dmypy.json
 .pyre/
 Rafle.csv
 .vscode/settings.json
+*.pth
