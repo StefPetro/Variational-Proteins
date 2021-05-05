@@ -140,7 +140,7 @@ def gen_weights(encodings, batch_size=1024):
     return (weights, neff)
 
 
-def data(batch_size = 128, device = 'cpu'):
+def data(batch_size = 128, device = 'cpu', weighted_sampling=True):
     df = fasta('data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m')
     df['label'] = labels('data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m')
 
@@ -158,14 +158,27 @@ def data(batch_size = 128, device = 'cpu'):
 
     ## Added - weighted sampling
     dataset    = encode(df.trimmed).to(device)
-    weights, neff = gen_weights(dataset, batch_size=batch_size)  # added
-    sampler = WeightedRandomSampler(weights=weights, num_samples=len(dataset), replacement=True)  # Added
-    dataloader = DataLoader(dataset, shuffle=False, batch_size=batch_size, sampler=sampler)  # Added sampler, changed shuffle to False
-    
-    mutants_df = mutants(df)
-    mutants_tensor = encode(mutants_df.sequence)
 
-    return dataloader, df, mutants_tensor, mutants_df, neff
+    # Check if we want weighted sampling
+    if weighted_sampling:
+        print('Dataset - Weighted')
+        weights, neff = gen_weights(dataset, batch_size=batch_size)  # added
+        sampler = WeightedRandomSampler(weights=weights, num_samples=len(dataset), replacement=True)  # Added
+        dataloader = DataLoader(dataset, shuffle=False, batch_size=batch_size, sampler=sampler)  # Added sampler, changed shuffle to False
+
+        mutants_df = mutants(df)
+        mutants_tensor = encode(mutants_df.sequence)
+
+        return dataloader, df, mutants_tensor, mutants_df, neff
+
+    else:
+        print('Dataset - Not weighted')
+        dataloader = DataLoader(dataset, shuffle=True, batch_size=batch_size)
+    
+        mutants_df = mutants(df)
+        mutants_tensor = encode(mutants_df.sequence)
+
+        return dataloader, df, mutants_tensor, mutants_df
 
 # nice colors for the terminal
 class c:
