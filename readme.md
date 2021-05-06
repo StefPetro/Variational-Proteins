@@ -10,7 +10,7 @@ The importance of understanding genetic variations and their impact on mutations
 
 ## Code
 
-The project has been developed in Python and uses the PyTorch library.
+The project has been developed in Python and uses the PyTorch library ([Installation guide](https://pytorch.org/get-started/locally/)).
 
 **Project Structure**:
 - `misc.py` is an utily file the load easily the data set stored in the `data/` folder 
