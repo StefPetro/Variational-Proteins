@@ -91,6 +91,6 @@ torch.save({
     'state_dict': vae.state_dict(), 
     'stats':      stats,
     'args':       args,
-}, "../models/ep200_hs2000_e512_ls16.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
+}, "models/ep200_hs2000_e512_ls16.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
 
 
