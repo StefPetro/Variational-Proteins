@@ -12,6 +12,12 @@ The importance of understanding genetic variations and their impact on mutations
 
 The project has been developed in Python and uses the PyTorch library ([Installation guide](https://pytorch.org/get-started/locally/)).
 
+Both implementations for the N-VAE (Variational Autoencoder) and S-VAE (Hyperspherical Variational Autoencoder) are included in the source code. Moreover, in both cases are it is possible to train a _basic_ VAE (`train_basic.py` and `train_s_vae_basic.py`) or the _advanced_ versions (`train.py` and `train_s_vae.py`). The _advanced_ versions also include:
+
+- Group Sparsity Prior (Limit the influence of neurons to a small number of positions)
+- Bayesian Learning (Prevent overfitting and achieve an "ensambling" effect)
+- Sequence weighting (Fix overrepresentation in the dataset)
+
 **Project Structure**:
 - `misc.py` is an utily file the load easily the data set stored in the `data/` folder 
 - `model_statistics.ipynb` Jupyter notebook to visualize the results store in the `models/` folder
