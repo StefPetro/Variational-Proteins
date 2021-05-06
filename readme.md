@@ -15,8 +15,8 @@ The project has been developed in Python and uses the PyTorch library.
 **Project Structure**:
 - `misc.py` is an utily file the load easily the data set stored in the `data/` folder 
 - `model_statistics.ipynb` Jupyter notebook to visualize the results store in the `models/` folder
-- `run-train.ps1` PowerShell script to execute the training
-- `N_VAE/` ***Variational Autoencoder**
+- `run-train.ps1` PowerShell script to execute the training (see instructions below)
+- `N_VAE/` ***Variational Autoencoder***
   -  `train.py` (PS: process 1)
   -  `train_basic.py` (PS: process 2)
   -  `vae.py`
