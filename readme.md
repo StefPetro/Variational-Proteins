@@ -19,8 +19,8 @@ Both implementations for the $\mathcal{N}$-VAE (Variational Autoencoder) and $\m
 - Sequence weighting (Fix overrepresentation in the dataset)
 
 **Project Structure**:
-- `hyperspherical_vae` folder with the Von Mises Fisher and Hyperspherical Uniform distribution. Module downloaded from [Nicola De Cao](https://github.com/nicola-decao/s-vae-pytorch)
-- `misc.py` is an utily file the load easily the data set stored in the `data/` folder 
+- `hyperspherical_vae/` folder with the Von Mises Fisher and Hyperspherical Uniform distribution. Module downloaded from [Nicola De Cao](https://github.com/nicola-decao/s-vae-pytorch)
+- `misc.py` is an utility file the load easily the data set stored in the `data/` folder 
 - `model_statistics.ipynb` Jupyter notebook to visualize the results store in the `models/` folder
 - `run-train.ps1` PowerShell script to execute the training (see instructions below)
 - `N_VAE/` ***Variational Autoencoder***
