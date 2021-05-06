@@ -17,7 +17,7 @@ eval_batch = torch.cat([wildtype.unsqueeze(0), mutants_tensor.to(device)])
 args = {
     'alphabet_len': dataloader.dataset[0].shape[0],
     'seq_len':      dataloader.dataset[0].shape[1],
-    'latent_size':  2,
+    'latent_size':  3,
     'hidden_size':  64,
 }
 
@@ -71,6 +71,6 @@ torch.save({
     'state_dict': vae.state_dict(), 
     'stats':      stats,
     'args':       args,
-}, "models/Basic_SVAE_ep200_hs64_ls2.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
+}, "models/Basic_SVAE_ep200_hs64_ls3.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
 
 
