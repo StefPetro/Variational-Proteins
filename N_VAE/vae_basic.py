@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 
-
 class Basic_VAE(torch.nn.Module):
     def __init__(self, **kwargs):
         super(Basic_VAE, self).__init__()

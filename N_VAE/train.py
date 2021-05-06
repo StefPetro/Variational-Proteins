@@ -1,9 +1,12 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import numpy as np
 from misc import data, c
 from torch import optim
 from scipy.stats import spearmanr
-from vae2 import VAE # import the last version
+from vae import VAE # import the last version
 
 def get_cor_ensamble(batch, mutants_values, model, ensambles = 512, rand = True):
     model.eval()

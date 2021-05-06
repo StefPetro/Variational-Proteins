@@ -1,32 +1,15 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import numpy as np
 from misc import data, c
 from torch import optim
 from scipy.stats import spearmanr
-from S_vae import S_VAE # import the last version
-
-def get_cor_ensamble(batch, mutants_values, model, ensambles = 512, rand = True):
-    model.eval()
-
-    mt_elbos, wt_elbos = 0, 0
-
-    for i in range(ensambles):
-        if i and (i % 2 == 0):
-            print(f"\tReached {i}/rand={rand}", " "*32, end="\r")
-
-        elbos     = model.logp(batch, rand=rand).detach().cpu()
-        wt_elbos += elbos[0]
-        mt_elbos += elbos[1:]
-
-    print()
-
-    diffs  = (mt_elbos / ensambles) - (wt_elbos / ensambles)
-    cor, _ = spearmanr(mutants_values, diffs)
-    
-    return cor
+from vae_basic import Basic_VAE # import the last version
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-dataloader, df, mutants_tensor, mutants_df, neff = data(batch_size = 64, device=device)
+dataloader, df, mutants_tensor, mutants_df = data(batch_size=64, device=device, weighted_sampling=False)
 
 wildtype   = dataloader.dataset[0] # one-hot-encoded wildtype 
 eval_batch = torch.cat([wildtype.unsqueeze(0), mutants_tensor.to(device)])
@@ -34,17 +17,16 @@ eval_batch = torch.cat([wildtype.unsqueeze(0), mutants_tensor.to(device)])
 args = {
     'alphabet_len': dataloader.dataset[0].shape[0],
     'seq_len':      dataloader.dataset[0].shape[1],
-    'neff':         neff,
-    'latent_size':  16
+    'latent_size':  2,
+    'hidden_size':  64,
 }
 
-vae   = S_VAE(**args).to(device) # Hyperspherical VAE
+vae   = Basic_VAE(**args).to(device)
 opt   = optim.Adam(vae.parameters())
 
 stats = {
     'rl': [],  # rl  = Reconstruction loss
     'klz': [], # kl  = Kullback-Leibler divergence loss
-    'klp': [],  # KL divergence loss for parameters
     'cor': []  # cor = Spearman correlation to experimentally measured 
     }          # protein fitness according to eq.1 from paper
 
@@ -58,22 +40,23 @@ for epoch in range(200):
     for batch in dataloader:
         # https://discuss.pytorch.org/t/what-step-backward-and-zero-grad-do/33301/2
         opt.zero_grad()
-        x_hat, mu, logvar, q_z, p_z = vae(batch)
-        loss, rl, klz, klp = vae.loss(x_hat, batch, mu, logvar, q_z, p_z)
-        loss.mean().backward()
+        x_hat, mu, logvar  = vae(batch)
+        loss, rl, klz = vae.loss(x_hat, batch, mu, logvar)
+        loss.mean().backward() 
         opt.step()
         epoch_losses['rl'].append(rl.mean().item())
-        epoch_losses['klp'].append(klp.mean().item())
         epoch_losses['klz'].append(klz.item())
 
     # Evaluation on mutants
     vae.eval()
-    cor = get_cor_ensamble(eval_batch, mutants_df.value, vae, ensambles=512, rand=True)
+    x_hat_eval, mu, logvar = vae(eval_batch)
+    elbos, _, _ = vae.loss(x_hat_eval, eval_batch, mu, logvar)
+    diffs       = elbos[1:] - elbos[0] # log-ratio (first equation in the paper)
+    cor, _      = spearmanr(mutants_df.value, diffs.detach().cpu())
     
     # Populate statistics 
     stats['rl'].append(np.mean(epoch_losses['rl']))
     stats['klz'].append(np.mean(epoch_losses['klz']))
-    stats['klp'].append(np.mean(epoch_losses['klp']))
     stats['cor'].append(np.abs(cor))
 
     to_print = [
@@ -88,6 +71,6 @@ torch.save({
     'state_dict': vae.state_dict(), 
     'stats':      stats,
     'args':       args,
-}, "models/SVAE_ep200_hs2000_e512_ls2_kaiming_allinit.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
+}, "models/Basic_Nvae_ep200_hs64_ls2.model.pth") # ep = epochs, hs = hidden size, e = ensamble, ls = latent size
 
 
